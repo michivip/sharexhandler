@@ -96,7 +96,8 @@ func (shareXHandler *ShareXHandler) handleUploadRequest(w http.ResponseWriter, r
 					} else {
 						w.WriteHeader(200)
 						w.Write([]byte(shareXHandler.ProtocolHost + shareXHandler.Path +
-							strings.Replace(shareXHandler.PathConfiguration.GetPath, "{id}", "", 1) + id))
+							strings.Replace(shareXHandler.PathConfiguration.GetPath, "{id}", "", 1) +
+							id + entry.GetFilename()[strings.LastIndex(entry.GetFilename(), "."):]))
 					}
 				}
 			}
@@ -111,31 +112,33 @@ func (shareXHandler *ShareXHandler) handleGetRequest(w http.ResponseWriter, req 
 	}
 	vars := mux.Vars(req)
 	id := vars["id"]
+	id = id[:strings.LastIndex(id, ".")]
 	if success, err, entry := shareXHandler.Storage.LoadStorageEntry(id); err != nil {
 		http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
 		panic(err)
 	} else if !success {
 		http.NotFound(w, req)
+	} else if req.Header.Get("If-None-Match") == entry.GetETagValue() {
+		w.WriteHeader(http.StatusNotModified)
+	} else if reader, err := entry.GetReader(); err != nil {
+		http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
+		panic(err)
 	} else {
-		if reader, err := entry.GetReader(); err != nil {
-			http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
-			panic(err)
-		} else {
-			w.WriteHeader(http.StatusOK)
-			w.Header().Set("Content-Type", entry.GetContentType())
-			buf := make([]byte, shareXHandler.BufferSize)
-			for {
-				n, err := reader.Read(buf)
-				if err != nil && err != io.EOF {
-					http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
-					panic(err)
-				}
-				if n == 0 {
-					break
-				}
-				if _, err := w.Write(buf[:n]); err != nil {
-					panic(err)
-				}
+		w.Header().Set("Content-Type", entry.GetContentType())
+		w.Header().Set("ETag", entry.GetETagValue())
+		w.WriteHeader(http.StatusOK)
+		buf := make([]byte, shareXHandler.BufferSize)
+		for {
+			n, err := reader.Read(buf)
+			if err != nil && err != io.EOF {
+				http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
+				panic(err)
+			}
+			if n == 0 {
+				break
+			}
+			if _, err := w.Write(buf[:n]); err != nil {
+				panic(err)
 			}
 		}
 	}
