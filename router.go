@@ -7,6 +7,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"bytes"
+	"strings"
 )
 
 // Path configuration:
@@ -28,6 +29,8 @@ type ShareXHandler struct {
 	BufferSize int
 	// The path has to start a slash ("/"). This is where the router gets bound on.
 	Path string
+	// This is used to respond to upload requests and refer the ShareX client to the right url. It should not end with a slash! Example: http://localhost:8080
+	ProtocolHost string
 }
 
 // This is the function which binds a ShareX handler router to the given path.
@@ -92,8 +95,8 @@ func (shareXHandler *ShareXHandler) handleUploadRequest(w http.ResponseWriter, r
 						panic(partErr)
 					} else {
 						w.WriteHeader(200)
-						w.Write([]byte("http://localhost:8080/sharex/"+id))
-						//http.Redirect(w, req, shareXHandler.Path+shareXHandler.PathConfiguration.GetPath+id, http.StatusTemporaryRedirect)
+						w.Write([]byte(shareXHandler.ProtocolHost + shareXHandler.Path +
+							strings.Replace(shareXHandler.PathConfiguration.GetPath, "{id}", "", 1) + id))
 					}
 				}
 			}
