@@ -85,6 +85,8 @@ func setupHttpsServer(storage sharexhandler.Storage) *http.Server {
 		ProtocolHost: "https://localhost",
 		// A custom handler hook to set headers.
 		OutgoingFunction: handleTlsRequest,
+		// This will display every png/jpg image and plain text (.txt file) in the client`s browser - every other content type will be downloaded manually.
+		WhitelistedContentTypes: []string{"image/png", "image/jpg", "text/plain"},
 	}
 	// Internal method which binds the ShareX handler with the given configuration to the parent router.
 	shareXHandler.BindToRouter(router)

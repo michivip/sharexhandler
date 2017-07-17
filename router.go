@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"bytes"
 	"strings"
+	"fmt"
 )
 
 // Path configuration:
@@ -31,6 +32,8 @@ type ShareXHandler struct {
 	Path string
 	// This is used to respond to upload requests and refer the ShareX client to the right url. It should not end with a slash! Example: http://localhost:8080
 	ProtocolHost string
+	// Whitelisted content types which will be displayed in the client`s browser.
+	WhitelistedContentTypes []string
 }
 
 // This is the function which binds a ShareX handler router to the given path.
@@ -105,6 +108,8 @@ func (shareXHandler *ShareXHandler) handleUploadRequest(w http.ResponseWriter, r
 	}
 }
 
+var dispositionValueFormat = "%v; filename=\"%v\""
+
 // This method handles get requests and shares files.
 func (shareXHandler *ShareXHandler) handleGetRequest(w http.ResponseWriter, req *http.Request) {
 	if shareXHandler.OutgoingFunction != nil {
@@ -124,6 +129,16 @@ func (shareXHandler *ShareXHandler) handleGetRequest(w http.ResponseWriter, req 
 		http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
 		panic(err)
 	} else {
+		// content-disposition: inline; filename="javaw_2017-07-10_18-29-32.png"
+		// content-disposition: attachment; filename="temp.html"
+		for _, value := range shareXHandler.WhitelistedContentTypes {
+			if strings.EqualFold(value, entry.GetContentType()) {
+				w.Header().Set("Content-Disposition", fmt.Sprintf(dispositionValueFormat, "inline", entry.GetFilename()))
+				goto inlinePassed
+			}
+		}
+		w.Header().Set("Content-Disposition", fmt.Sprintf(dispositionValueFormat, "attachment", entry.GetFilename()))
+	inlinePassed:
 		w.Header().Set("Content-Type", entry.GetContentType())
 		w.Header().Set("ETag", entry.GetETagValue())
 		w.WriteHeader(http.StatusOK)
