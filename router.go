@@ -30,7 +30,7 @@ type ShareXHandler struct {
 	BufferSize int
 	// The path has to start a slash ("/"). This is where the router gets bound on.
 	Path string
-	// This is used to respond to upload requests and refer the ShareX client to the right url. It should not end with a slash! Example: http://localhost:8080
+	// This is used to respond to upload requests and refer the ShareX client to the right url. It has to end with a slash! Example: http://localhost:8080/
 	ProtocolHost string
 	// Whitelisted content types which will be displayed in the client`s browser.
 	WhitelistedContentTypes []string
@@ -98,9 +98,8 @@ func (shareXHandler *ShareXHandler) handleUploadRequest(w http.ResponseWriter, r
 						panic(partErr)
 					} else {
 						w.WriteHeader(200)
-						w.Write([]byte(shareXHandler.ProtocolHost + shareXHandler.Path +
-							strings.Replace(shareXHandler.PathConfiguration.GetPath, "{id}", "", 1) +
-							id + entry.GetFilename()[strings.LastIndex(entry.GetFilename(), "."):]))
+						url := shareXHandler.ProtocolHost + id + entry.GetFilename()[strings.LastIndex(entry.GetFilename(), "."):]
+						w.Write([]byte(url))
 					}
 				}
 			}
