@@ -116,7 +116,12 @@ func (shareXHandler *ShareXHandler) handleGetRequest(w http.ResponseWriter, req 
 	}
 	vars := mux.Vars(req)
 	id := vars["id"]
-	id = id[:strings.LastIndex(id, ".")]
+	lastDotIndex := strings.LastIndex(id, ".")
+	if lastDotIndex == -1 {
+		http.NotFound(w, req)
+		return
+	}
+	id = id[:lastDotIndex]
 	if success, err, entry := shareXHandler.Storage.LoadStorageEntry(id); err != nil {
 		http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
 		panic(err)
