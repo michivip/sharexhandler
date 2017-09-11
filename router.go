@@ -6,8 +6,8 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
-	"bytes"
 	"strings"
+	"log"
 	"fmt"
 )
 
@@ -43,11 +43,82 @@ func (shareXHandler *ShareXHandler) BindToRouter(parentRouter *mux.Router) {
 	router.HandleFunc(shareXHandler.PathConfiguration.GetPath, shareXHandler.handleGetRequest)
 }
 
+func (shareXHandler *ShareXHandler) handleUploadRequest2(w http.ResponseWriter, req *http.Request) {
+	if shareXHandler.OutgoingFunction != nil {
+		shareXHandler.OutgoingFunction(w, req)
+	}
+	if err := req.ParseMultipartForm(1 << 20); err != nil {
+		http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
+		log.Printf("An error occurred while parsing multipart form: %v\n", err)
+	} else {
+		if file, multipartFileHeader, err := req.FormFile("file"); err != nil {
+			http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
+			log.Printf("An error occurred while reading the form file: %v\n", err)
+		} else {
+			fileHeader := make([]byte, 512)
+			_, err := file.Read(fileHeader)
+			if err != nil {
+				http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
+				log.Printf("An error occurred while reading the file header: %v\n", err)
+			}
+			if _, err := file.Seek(0, 0); err != nil {
+				panic(err)
+			}
+			fileName := multipartFileHeader.Filename
+			size := file.(interface {
+				Size() int64
+			}).Size()
+			mimeType := http.DetectContentType(fileHeader)
+			entry := shareXHandler.Storage.NewStorageEntry()
+			if err := entry.Save(); err != nil {
+				http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
+				log.Printf("An error occurred while saving a ShareX entry: %v\n", err)
+			} else {
+				id := entry.GetId()
+				if writer, err := entry.GetWriter(); err != nil {
+					http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
+					log.Printf("An error occurred while getting the writer of the entry (%v): %v\n", entry.GetId(), err)
+				} else {
+					defer writer.Close()
+					entry.SetContentType(mimeType)
+					entry.SetFilename(fileName)
+					for {
+						buffer := make([]byte, 8192)
+						bytesRead, err := file.Read(buffer)
+						if bytesRead == 0 {
+							break
+						} else if err != nil {
+							http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
+							log.Printf("An error occurred while buffering a piece of the body: %v\n", err)
+						} else {
+							writer.Write(buffer)
+						}
+					}
+					if err := entry.Update(); err != nil {
+						http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
+						log.Printf("An error occurred while updating the entry (%v): %v\n", entry.GetId(), err)
+					} else {
+						log.Printf("Created entry %v (%v bytes)\n", entry.GetId(), size)
+						w.WriteHeader(200)
+						url := shareXHandler.ProtocolHost + id + entry.GetFilename()[strings.LastIndex(entry.GetFilename(), "."):]
+						w.Write([]byte(url))
+					}
+				}
+			}
+		}
+	}
+}
+
 // This method handles incoming POST upload request.
 func (shareXHandler *ShareXHandler) handleUploadRequest(w http.ResponseWriter, req *http.Request) {
 	if shareXHandler.OutgoingFunction != nil {
 		shareXHandler.OutgoingFunction(w, req)
 	}
+	shareXHandler.handleUploadRequest2(w, req)
+	if true {
+		return
+	}
+
 	var err error
 	_, params, err := mime.ParseMediaType(req.Header.Get("Content-Type"))
 	if err != nil {
@@ -70,29 +141,37 @@ func (shareXHandler *ShareXHandler) handleUploadRequest(w http.ResponseWriter, r
 				part, partErr = multipartReader.NextPart()
 				if partErr != nil {
 					http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
-					panic(partErr)
+					if partErr != io.EOF {
+						log.Printf("There was an error while reading the next part: %v\n", partErr)
+					}
 				} else {
-					buf := new(bytes.Buffer)
 					entry.SetContentType(part.Header.Get("Content-Type"))
 					entry.SetFilename(part.FileName())
-					for ; ; {
+					fmt.Println()
+					for {
 						if partErr == nil {
-							buf.Reset()
-							if _, err := io.Copy(buf, part); err != nil {
-								http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
-								panic(err)
-							} else {
-								writer.Write(buf.Bytes())
+							buf := make([]byte, 8192)
+							for {
+								bytesRead, readErr := part.Read(buf)
+								if bytesRead == 0 {
+									break
+								} else if readErr != nil {
+									http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
+									log.Printf("An error occurred while buffering a piece of the part: %T %v\n", readErr, readErr)
+									break
+								} else {
+									writer.Write(buf)
+								}
 							}
 						} else if partErr != io.EOF {
 							http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
-							panic(partErr)
+							log.Printf("There was an error while reading the next part: %v\n", partErr)
 						} else {
 							break
 						}
+						part.Close()
 						part, partErr = multipartReader.NextPart()
 					}
-					buf.Reset()
 					if err := entry.Update(); err != nil {
 						http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
 						panic(partErr)
@@ -133,7 +212,7 @@ func (shareXHandler *ShareXHandler) handleGetRequest(w http.ResponseWriter, req 
 		http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
 		panic(err)
 	} else {
-		// content-disposition: inline; filename="javaw_2017-07-10_18-29-32.png"
+		// content-disposition: inline; filename="gogland_2017-07-10_18-29-32.png"
 		// content-disposition: attachment; filename="temp.html"
 		for _, value := range shareXHandler.WhitelistedContentTypes {
 			if strings.EqualFold(value, entry.GetContentType()) {
@@ -156,7 +235,7 @@ func (shareXHandler *ShareXHandler) handleGetRequest(w http.ResponseWriter, req 
 			if n == 0 {
 				break
 			}
-			if _, err := w.Write(buf[:n]); err != nil {
+			if _, err := w.Write(buf); err != nil {
 				panic(err)
 			}
 		}
