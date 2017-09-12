@@ -26,7 +26,7 @@ type MongoStorageEntry struct {
 	Author        string `bson:"author,omitempty"`
 	Filename      string `bson:"filename,omitempty"`
 	ContentType   string `bson:"content_type,omitempty"`
-	ETagValue     string `bson:"e_tag,omitempty"`
+	LastModified  time.Time `bson:"last_modified,omitempty"`
 	UploadDate    time.Time `bson:"upload_date,omitempty"`
 }
 
@@ -59,12 +59,12 @@ func (mongoStorageEntry *MongoStorageEntry) SetContentType(contentType string) {
 	mongoStorageEntry.ContentType = contentType
 }
 
-func (mongoStorageEntry *MongoStorageEntry) GetETagValue() string {
-	return mongoStorageEntry.ETagValue
+func (mongoStorageEntry *MongoStorageEntry) GetLastModifiedValue() time.Time {
+	return mongoStorageEntry.LastModified
 }
 
-func (mongoStorageEntry *MongoStorageEntry) SetETagValue(eTagValue string) {
-	mongoStorageEntry.ETagValue = eTagValue
+func (mongoStorageEntry *MongoStorageEntry) SetLastModifiedValue(lastModified time.Time) {
+	mongoStorageEntry.LastModified = lastModified
 }
 
 func (mongoStorageEntry *MongoStorageEntry) GetUploadDate() time.Time {
@@ -104,7 +104,7 @@ func (mongoStorageEntry *MongoStorageEntry) Delete() error {
 	return collection.RemoveId(mongoStorageEntry.Id)
 }
 
-func (mongoStorageEntry *MongoStorageEntry) GetReader() (io.ReadCloser, error) {
+func (mongoStorageEntry *MongoStorageEntry) GetReadSeeker() (io.ReadSeeker, error) {
 	path := mongoStorageEntry.configuration.FileFolderPath + mongoStorageEntry.GetId()
 	return os.Open(path)
 }
@@ -140,11 +140,12 @@ func (mongoStorage *MongoStorage) Close() (bool, error) {
 }
 
 func (mongoStorage *MongoStorage) NewStorageEntry() sharexhandler.Entry {
+	uploadDate := time.Now()
 	return &MongoStorageEntry{
 		configuration: mongoStorage.Configuration,
 		database:      mongoStorage.database,
-		ETagValue:     "a",
-		UploadDate:    time.Now(),
+		LastModified:  uploadDate,
+		UploadDate:    uploadDate,
 	}
 }
 

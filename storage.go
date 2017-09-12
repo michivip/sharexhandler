@@ -22,10 +22,10 @@ type Entry interface {
 	GetContentType() string
 	// Sets the content type
 	SetContentType(contentType string)
-	// Returns the e-tag value
-	GetETagValue() string
+	// Returns the last modified date
+	GetLastModifiedValue() time.Time
 	// Sets the e-tag value
-	SetETagValue(eTagValue string)
+	SetLastModifiedValue(lastModified time.Time)
 	// Returns the upload date
 	GetUploadDate() time.Time
 	// Sets the upload date
@@ -45,9 +45,9 @@ type Entry interface {
 	// It deletes the entry by its Id. Therefore only the Id has to be set.
 	// Returns an error if something went wrong or nil if not.
 	Delete() error
-	// This method is used to get a reader and therefore the content of the entry.
+	// This method is used to get a read-seeker and therefore the content of the entry.
 	// It returns a reader which can be used to read the data and an error if something went wrong or nil if not.
-	GetReader() (io.ReadCloser, error)
+	GetReadSeeker() (io.ReadSeeker, error)
 	// This method is used to store content of the file. It returns a writer which can be used to write all content.
 	GetWriter() (io.WriteCloser, error)
 	// <<<
