@@ -122,7 +122,7 @@ func (shareXHandler *ShareXHandler) handleGetRequest(w http.ResponseWriter, req 
 	id := vars["id"]
 	lastDotIndex := strings.LastIndex(id, ".")
 	if lastDotIndex == -1 {
-		http.NotFound(w, req)
+		shareXHandler.router.NotFoundHandler.ServeHTTP(w, req)
 		return
 	}
 	id = id[:lastDotIndex]
