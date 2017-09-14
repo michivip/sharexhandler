@@ -33,13 +33,17 @@ type ShareXHandler struct {
 	ProtocolHost string
 	// Whitelisted content types which will be displayed in the client`s browser.
 	WhitelistedContentTypes []string
+	// Internal router to get the NotFoundHandler
+	router *mux.Router
 }
 
 // This is the function which binds a ShareX handler router to the given path.
-func (shareXHandler *ShareXHandler) BindToRouter(parentRouter *mux.Router) {
+func (shareXHandler *ShareXHandler) BindToRouter(parentRouter *mux.Router) (subRouter *mux.Router) {
 	router := parentRouter.PathPrefix(shareXHandler.Path).Subrouter()
 	router.HandleFunc(shareXHandler.PathConfiguration.UploadPath, shareXHandler.handleUploadRequest)
 	router.HandleFunc(shareXHandler.PathConfiguration.GetPath, shareXHandler.handleGetRequest)
+	shareXHandler.router = router
+	return router
 }
 
 func (shareXHandler *ShareXHandler) handleUploadRequest(w http.ResponseWriter, req *http.Request) {
@@ -126,7 +130,7 @@ func (shareXHandler *ShareXHandler) handleGetRequest(w http.ResponseWriter, req 
 		http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
 		log.Printf("There was a database error while loading the entry %v: %v", entry.GetId(), err)
 	} else if !success {
-		http.NotFound(w, req)
+		shareXHandler.router.NotFoundHandler.ServeHTTP(w, req)
 	} else if readSeeker, err := entry.GetReadSeeker(); err != nil {
 		http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
 		log.Printf("There was an error while reading the entry %v: %v", entry.GetId(), err)
