@@ -6,7 +6,6 @@ import (
 	"strings"
 	"log"
 	"fmt"
-	"io/ioutil"
 )
 
 // Path configuration:
