@@ -6,6 +6,7 @@ import (
 	"strings"
 	"log"
 	"fmt"
+	"io/ioutil"
 )
 
 // Path configuration:
@@ -93,7 +94,7 @@ func (shareXHandler *ShareXHandler) handleUploadRequest(w http.ResponseWriter, r
 							http.Error(w, "500 an internal error occurred", http.StatusInternalServerError)
 							log.Printf("An error occurred while buffering a piece of the body: %v\n", err)
 						} else {
-							writer.Write(buffer)
+							writer.Write(buffer[:bytesRead])
 						}
 					}
 					if err := entry.Update(); err != nil {
@@ -102,7 +103,14 @@ func (shareXHandler *ShareXHandler) handleUploadRequest(w http.ResponseWriter, r
 					} else {
 						log.Printf("Created entry %v (%v bytes)\n", entry.GetId(), total)
 						w.WriteHeader(http.StatusOK)
-						url := shareXHandler.ProtocolHost + id + entry.GetFilename()[strings.LastIndex(entry.GetFilename(), "."):]
+						dotIndex := strings.LastIndex(entry.GetFilename(), ".")
+						var fileEnding string
+						if dotIndex == -1 {
+							fileEnding = ""
+						} else {
+							fileEnding = entry.GetFilename()[strings.LastIndex(entry.GetFilename(), "."):]
+						}
+						url := shareXHandler.ProtocolHost + id + fileEnding
 						w.Write([]byte(url))
 					}
 				}
@@ -122,8 +130,7 @@ func (shareXHandler *ShareXHandler) handleGetRequest(w http.ResponseWriter, req 
 	id := vars["id"]
 	lastDotIndex := strings.LastIndex(id, ".")
 	if lastDotIndex == -1 {
-		shareXHandler.router.NotFoundHandler.ServeHTTP(w, req)
-		return
+		lastDotIndex = len(id)
 	}
 	id = id[:lastDotIndex]
 	if success, err, entry := shareXHandler.Storage.LoadStorageEntry(id); err != nil {
@@ -144,6 +151,7 @@ func (shareXHandler *ShareXHandler) handleGetRequest(w http.ResponseWriter, req 
 			}
 		}
 		w.Header().Set("Content-Disposition", fmt.Sprintf(dispositionValueFormat, "attachment", entry.GetFilename()))
+		w.Header().Set("Content-Type", entry.GetContentType())
 	inlinePassed:
 		http.ServeContent(w, req, "", entry.GetLastModifiedValue(), readSeeker)
 	}
